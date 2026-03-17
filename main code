@@ -1,0 +1,319 @@
+import tkinter as tk
+from tkinter import messagebox
+import random
+import time
+
+//Sudoku dengan Backtracking
+
+def is_valid(board, num, row, col):
+    for i in range(9):
+        if board[row][i] == num or board[i][col] == num:
+            return False
+
+    box_x = col // 3
+    box_y = row // 3
+
+    for i in range(box_y*3, box_y*3+3):
+        for j in range(box_x*3, box_x*3+3):
+            if board[i][j] == num:
+                return False
+
+    return True
+
+
+def solve_board(board):
+    for r in range(9):
+        for c in range(9):
+            if board[r][c] == 0:
+                nums = list(range(1,10))
+                random.shuffle(nums)
+                for n in nums:
+                    if is_valid(board,n,r,c):
+                        board[r][c] = n
+                        if solve_board(board):
+                            return True
+                        board[r][c] = 0
+                return False
+    return True
+
+
+def generate_board():
+    board = [[0]*9 for _ in range(9)]
+    solve_board(board)
+    return board
+
+
+//Game
+
+class SudokuGame:
+
+    def __init__(self, root):
+
+        self.root = root
+        self.root.title("Sudoku Game")
+        self.root.configure(bg="#f4f6fb")
+
+        self.entries = []
+
+        self.board = generate_board()
+        self.puzzle = self.create_puzzle()
+
+        self.mistakes = 0
+        self.max_mistakes = 5
+
+        self.start_time = time.time()
+        self.best_time = None
+
+        title = tk.Label(root,text="SUDOKU",font=("Arial",26,"bold"),bg="#f4f6fb")
+        title.grid(row=0,column=0,columnspan=9,pady=(10,5))
+
+        self.info = tk.Label(root,text=f"Mistakes: 0 / {self.max_mistakes}",font=("Arial",12),bg="#f4f6fb")
+        self.info.grid(row=1,column=0,columnspan=3)
+
+        self.timer_label = tk.Label(root,text="Time: 00:00",font=("Arial",12),bg="#f4f6fb")
+        self.timer_label.grid(row=1,column=3,columnspan=3)
+
+        self.best_label = tk.Label(root,text="Best: --:--",font=("Arial",12),bg="#f4f6fb")
+        self.best_label.grid(row=1,column=6,columnspan=3)
+
+        self.grid_frame = tk.Frame(root,bg="black",bd=3)
+        self.grid_frame.grid(row=2,column=0,columnspan=9,padx=10,pady=10)
+
+        self.create_grid()
+
+        button_frame = tk.Frame(root,bg="#f4f6fb")
+        button_frame.grid(row=3,column=0,columnspan=9,pady=10)
+
+        solve_btn = tk.Button(button_frame,text="Solve",width=12,font=("Arial",12,"bold"),command=self.animate_solution)
+        solve_btn.grid(row=0,column=0,padx=10)
+
+        reset_btn = tk.Button(button_frame,text="New Game",width=12,font=("Arial",12,"bold"),command=self.reset_game)
+        reset_btn.grid(row=0,column=1,padx=10)
+
+        self.update_timer()
+
+
+//puzzel
+
+    def create_puzzle(self):
+
+        puzzle = [row[:] for row in self.board]
+
+        # easier difficulty (remove fewer numbers)
+        cells_to_remove = 30
+
+        while cells_to_remove > 0:
+
+            r = random.randint(0,8)
+            c = random.randint(0,8)
+
+            if puzzle[r][c] != 0:
+                puzzle[r][c] = 0
+                cells_to_remove -= 1
+
+        return puzzle
+
+
+//tampilan kotak 
+
+    def create_grid(self):
+
+        for i in range(9):
+
+            row = []
+
+            for j in range(9):
+
+                top = 3 if i%3==0 else 1
+                left = 3 if j%3==0 else 1
+                bottom = 3 if i==8 else 1
+                right = 3 if j==8 else 1
+
+                frame = tk.Frame(self.grid_frame,highlightbackground="black",highlightthickness=1)
+                frame.grid(row=i,column=j,padx=(left,right),pady=(top,bottom))
+
+                e = tk.Entry(frame,width=2,font=("Arial",20,"bold"),justify='center',bd=0)
+                e.pack(ipadx=10,ipady=10)
+
+                if self.puzzle[i][j] != 0:
+
+                    e.insert(0,str(self.puzzle[i][j]))
+                    e.config(state="disabled")
+
+                else:
+
+                    e.bind("<KeyRelease>",lambda event,r=i,c=j:self.validate(event,r,c))
+                    e.bind("<FocusIn>",lambda event,r=i,c=j:self.highlight(r,c))
+
+                row.append(e)
+
+            self.entries.append(row)
+
+
+//warna penanda
+
+    def highlight(self,row,col):
+
+        for i in range(9):
+            for j in range(9):
+                self.entries[i][j].config(bg="white")
+
+        for i in range(9):
+            self.entries[row][i].config(bg="#e8f0ff")
+            self.entries[i][col].config(bg="#e8f0ff")
+
+        box_x = col//3
+        box_y = row//3
+
+        for i in range(box_y*3,box_y*3+3):
+            for j in range(box_x*3,box_x*3+3):
+                self.entries[i][j].config(bg="#dfe7fd")
+
+
+//cek cek
+
+    def validate(self,event,row,col):
+
+        val = self.entries[row][col].get()
+
+        if val == "":
+            return
+
+        if not val.isdigit() or int(val)<1 or int(val)>9:
+            self.entries[row][col].delete(0,tk.END)
+            return
+
+        if int(val) == self.board[row][col]:
+
+            self.entries[row][col].config(fg="green")
+
+            if self.check_win():
+                self.mission_complete()
+
+        else:
+
+            self.entries[row][col].config(fg="red")
+
+            self.mistakes += 1
+
+            self.info.config(text=f"Mistakes: {self.mistakes} / {self.max_mistakes}")
+
+            if self.mistakes >= self.max_mistakes:
+                messagebox.showerror("Game Over","Too many mistakes!")
+                self.animate_solution()
+
+
+//kalo menang
+
+    def check_win(self):
+
+        for i in range(9):
+            for j in range(9):
+
+                val = self.entries[i][j].get()
+
+                if val == "" or int(val) != self.board[i][j]:
+                    return False
+
+        return True
+
+
+    def mission_complete(self):
+
+        total = int(time.time()-self.start_time)
+
+        minutes = total//60
+        seconds = total%60
+
+        if self.best_time is None or total < self.best_time:
+            self.best_time = total
+
+        if self.best_time:
+            m = self.best_time//60
+            s = self.best_time%60
+            self.best_label.config(text=f"Best: {m:02d}:{s:02d}")
+
+        messagebox.showinfo("Mission Complete",f"🎉 Sudoku Completed!\nTime: {minutes:02d}:{seconds:02d}")
+
+
+//animasi sedikit
+
+    def animate_solution(self):
+
+        board_copy = [row[:] for row in self.puzzle]
+
+        self.solve_visual(board_copy)
+
+
+    def solve_visual(self,board):
+
+        for r in range(9):
+            for c in range(9):
+
+                if board[r][c] == 0:
+
+                    for n in range(1,10):
+
+                        if is_valid(board,n,r,c):
+
+                            board[r][c] = n
+
+                            self.entries[r][c].config(state="normal")
+                            self.entries[r][c].delete(0,tk.END)
+                            self.entries[r][c].insert(0,str(n))
+                            self.root.update()
+
+                            self.root.after(40)
+
+                            if self.solve_visual(board):
+                                return True
+
+                            board[r][c] = 0
+
+                            self.entries[r][c].delete(0,tk.END)
+                            self.root.update()
+
+                    return False
+
+        return True
+
+
+//waktu
+
+    def update_timer(self):
+
+        elapsed = int(time.time()-self.start_time)
+
+        m = elapsed//60
+        s = elapsed%60
+
+        self.timer_label.config(text=f"Time: {m:02d}:{s:02d}")
+
+        self.root.after(1000,self.update_timer)
+
+
+//reset ulang
+
+    def reset_game(self):
+
+        for widget in self.grid_frame.winfo_children():
+            widget.destroy()
+
+        self.entries = []
+
+        self.board = generate_board()
+        self.puzzle = self.create_puzzle()
+
+        self.mistakes = 0
+        self.info.config(text=f"Mistakes: 0 / {self.max_mistakes}")
+
+        self.start_time = time.time()
+
+        self.create_grid()
+
+//run
+
+root = tk.Tk()
+root.resizable(False,False)
+SudokuGame(root)
+root.mainloop()
